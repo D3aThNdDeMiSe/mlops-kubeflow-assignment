@@ -1,85 +1,66 @@
-pipeline {
-    agent any
-    
-    environment {
-        PYTHON_VERSION = '3.9'
-        PIPELINE_FILE = 'components/pipeline.yaml'
-    }
-    
-    options {
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 30, unit: 'MINUTES')
-        timestamps()
-    }
-    
-    stages {
-        stage('Environment Setup') {
-            steps {
-                echo '================================================'
-                echo 'Stage 1: Environment Setup'
-                echo '================================================'
-                
-                script {
-                    echo "Build #${env.BUILD_NUMBER}"
-                    echo "Branch: ${env.GIT_BRANCH}"
-                    echo "Commit: ${env.GIT_COMMIT}"
-                }
-                
-                checkout scm
-                
-                // First, check if Python 3.9 is available
-                sh '''
-                    echo "Checking Python versions available..."
-                    python3.9 --version || echo "Python 3.9 not found, will use python3"
-                    
-                    # Use python3.9 if available, otherwise fall back to python3
-                    if command -v python3.9 &> /dev/null; then
-                        PYTHON_CMD=python3.9
-                        echo "Using Python 3.9"
-                    else
-                        PYTHON_CMD=python3
-                        echo "Using default Python 3"
-                        $PYTHON_CMD --version
-                    fi
-                    
-                    echo "Setting up Python virtual environment..."
-                    rm -rf venv
-                    
-                    # Create virtual environment with the chosen Python version
-                    $PYTHON_CMD -m venv venv
-                    
-                    # Activate virtual environment
-                    . venv/bin/activate
-                    
-                    echo "Python version in venv:"
-                    python --version
-                    
-                    echo "Upgrading pip and installing build tools..."
-                    pip install --upgrade pip setuptools wheel
-                    
-                    echo "Installing project dependencies..."
-                    pip install -r requirements.txt
-                    
-                    echo "✅ Dependencies installed successfully in virtual environment"
-                '''
-                
-                // Display environment info
-                sh '''
-                    . venv/bin/activate
-                    echo ""
-                    echo "Environment Information:"
-                    echo "========================"
-                    echo "Python version:"
-                    python --version
-                    echo ""
-                    echo "Virtual environment location:"
-                    which python
-                    echo ""
-                    echo "Key packages installed:"
-                    pip list | grep -E "kfp|dvc|scikit-learn|pandas|numpy"
-                '''
-            }
+stage('Environment Setup') {
+    steps {
+        echo '================================================'
+        echo 'Stage 1: Environment Setup'
+        echo '================================================'
+        
+        script {
+            echo "Build #${env.BUILD_NUMBER}"
+            echo "Branch: ${env.GIT_BRANCH}"
+            echo "Commit: ${env.GIT_COMMIT}"
         }
+        
+        checkout scm
+        
+        sh '''
+            echo "Checking Python versions available..."
+            python3.9 --version || echo "Python 3.9 not found"
+            
+            # Install virtualenv if not present
+            if ! command -v virtualenv &> /dev/null; then
+                echo "Installing virtualenv..."
+                sudo apt-get update
+                sudo apt-get install -y virtualenv
+            fi
+            
+            echo "Setting up Python virtual environment..."
+            rm -rf venv
+            
+            # Create virtual environment using virtualenv
+            virtualenv -p python3.9 venv
+            
+            # Activate virtual environment
+            . venv/bin/activate
+            
+            echo "Python version in venv:"
+            python --version
+            
+            echo "Upgrading pip and installing build tools..."
+            pip install --upgrade pip setuptools wheel
+            
+            echo "Installing project dependencies..."
+            pip install -r requirements.txt
+            
+            echo "✅ Dependencies installed successfully in virtual environment"
+        '''
+        
+        // Display environment info
+        sh '''
+            . venv/bin/activate
+            echo ""
+            echo "Environment Information:"
+            echo "========================"
+            echo "Python version:"
+            python --version
+            echo ""
+            echo "Virtual environment location:"
+            which python
+            echo ""
+            echo "Key packages installed:"
+            pip list | grep -E "kfp|dvc|scikit-learn|pandas|numpy"
+        '''
+    }
+}
         
         stage('Pipeline Compilation') {
             steps {
