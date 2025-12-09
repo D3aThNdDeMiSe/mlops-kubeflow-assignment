@@ -7,11 +7,8 @@ pipeline {
     }
     
     options {
-        // Keep only last 10 builds to save space
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        // Timeout if pipeline takes more than 30 minutes
         timeout(time: 30, unit: 'MINUTES')
-        // Timestamps in console output
         timestamps()
     }
     
@@ -22,28 +19,40 @@ pipeline {
                 echo 'Stage 1: Environment Setup'
                 echo '================================================'
                 
-                // Display build information
                 script {
                     echo "Build #${env.BUILD_NUMBER}"
                     echo "Branch: ${env.GIT_BRANCH}"
                     echo "Commit: ${env.GIT_COMMIT}"
                 }
                 
-                // Checkout code from GitHub
                 checkout scm
                 
-                // Create virtual environment and install dependencies
+                // First, check if Python 3.9 is available
                 sh '''
-                    echo "Setting up Python virtual environment..."
+                    echo "Checking Python versions available..."
+                    python3.9 --version || echo "Python 3.9 not found, will use python3"
                     
-                    # Remove old venv if exists
+                    # Use python3.9 if available, otherwise fall back to python3
+                    if command -v python3.9 &> /dev/null; then
+                        PYTHON_CMD=python3.9
+                        echo "Using Python 3.9"
+                    else
+                        PYTHON_CMD=python3
+                        echo "Using default Python 3"
+                        $PYTHON_CMD --version
+                    fi
+                    
+                    echo "Setting up Python virtual environment..."
                     rm -rf venv
                     
-                    # Create new virtual environment
-                    python3 -m venv venv
+                    # Create virtual environment with the chosen Python version
+                    $PYTHON_CMD -m venv venv
                     
-                    # Activate virtual environment and install dependencies
+                    # Activate virtual environment
                     . venv/bin/activate
+                    
+                    echo "Python version in venv:"
+                    python --version
                     
                     echo "Upgrading pip and installing build tools..."
                     pip install --upgrade pip setuptools wheel
@@ -67,7 +76,7 @@ pipeline {
                     which python
                     echo ""
                     echo "Key packages installed:"
-                    pip list | grep -E "kfp|dvc|scikit-learn|pandas"
+                    pip list | grep -E "kfp|dvc|scikit-learn|pandas|numpy"
                 '''
             }
         }
