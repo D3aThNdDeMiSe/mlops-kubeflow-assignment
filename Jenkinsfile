@@ -6,6 +6,15 @@ pipeline {
         PIPELINE_FILE = 'components/pipeline.yaml'
     }
     
+    options {
+        // Keep only last 10 builds to save space
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Timeout if pipeline takes more than 30 minutes
+        timeout(time: 30, unit: 'MINUTES')
+        // Timestamps in console output
+        timestamps()
+    }
+    
     stages {
         stage('Environment Setup') {
             steps {
@@ -13,22 +22,51 @@ pipeline {
                 echo 'Stage 1: Environment Setup'
                 echo '================================================'
                 
+                // Display build information
+                script {
+                    echo "Build #${env.BUILD_NUMBER}"
+                    echo "Branch: ${env.GIT_BRANCH}"
+                    echo "Commit: ${env.GIT_COMMIT}"
+                }
+                
                 // Checkout code from GitHub
                 checkout scm
                 
-                // Install Python dependencies
+                // Create virtual environment and install dependencies
                 sh '''
-                    echo "Installing Python dependencies..."
-                    python3 -m pip install --upgrade pip
-                    python3 -m pip install -r requirements.txt
-                    echo "✅ Dependencies installed successfully"
+                    echo "Setting up Python virtual environment..."
+                    
+                    # Remove old venv if exists
+                    rm -rf venv
+                    
+                    # Create new virtual environment
+                    python3 -m venv venv
+                    
+                    # Activate virtual environment and install dependencies
+                    . venv/bin/activate
+                    
+                    echo "Upgrading pip..."
+                    pip install --upgrade pip
+                    
+                    echo "Installing project dependencies..."
+                    pip install -r requirements.txt
+                    
+                    echo "✅ Dependencies installed successfully in virtual environment"
                 '''
                 
                 // Display environment info
                 sh '''
+                    . venv/bin/activate
+                    echo ""
+                    echo "Environment Information:"
+                    echo "========================"
                     echo "Python version:"
-                    python3 --version
-                    echo "Pip packages:"
+                    python --version
+                    echo ""
+                    echo "Virtual environment location:"
+                    which python
+                    echo ""
+                    echo "Key packages installed:"
                     pip list | grep -E "kfp|dvc|scikit-learn|pandas"
                 '''
             }
@@ -40,10 +78,13 @@ pipeline {
                 echo 'Stage 2: Pipeline Compilation'
                 echo '================================================'
                 
-                // Compile the Kubeflow pipeline
+                // Compile the Kubeflow pipeline using venv
                 sh '''
+                    # Activate virtual environment
+                    . venv/bin/activate
+                    
                     echo "📦 Compiling Kubeflow pipeline..."
-                    python3 pipeline.py
+                    python pipeline.py
                     
                     # Verify the pipeline YAML was created
                     if [ -f "${PIPELINE_FILE}" ]; then
@@ -64,10 +105,13 @@ pipeline {
                 echo 'Stage 3: Pipeline Validation'
                 echo '================================================'
                 
-                // Validate pipeline YAML structure
+                // Validate pipeline YAML structure using venv
                 sh '''
+                    # Activate virtual environment
+                    . venv/bin/activate
+                    
                     echo "🔍 Validating pipeline YAML structure..."
-                    python3 << EOF
+                    python << EOF
 import yaml
 import sys
 
@@ -117,6 +161,11 @@ EOF
             archiveArtifacts artifacts: 'components/pipeline.yaml', fingerprint: true
             
             echo 'The compiled pipeline has been archived and is ready for deployment to Kubeflow.'
+            
+            // Optional: Send notification (if configured)
+            // emailext subject: "Jenkins: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER} - Success",
+            //          body: "Pipeline compiled successfully!",
+            //          to: "your-email@example.com"
         }
         
         failure {
@@ -124,15 +173,23 @@ EOF
             echo '❌ Pipeline CI failed!'
             echo '================================================'
             echo 'Please check the logs above for error details.'
+            
+            // Optional: Send notification (if configured)
+            // emailext subject: "Jenkins: ${env.JOB_NAME} - Build #${env.BUILD_NUMBER} - Failed",
+            //          body: "Pipeline compilation failed. Check Jenkins for details.",
+            //          to: "your-email@example.com"
         }
         
         always {
             echo '================================================'
             echo 'Cleaning up workspace...'
             echo '================================================'
-            // Clean up Python cache files
-            sh 'find . -type d -name __pycache__ -exec rm -rf {} + || true'
-            sh 'find . -type f -name "*.pyc" -delete || true'
+            // Clean up Python cache files and virtual environment
+            sh '''
+                find . -type d -name __pycache__ -exec rm -rf {} + || true
+                find . -type f -name "*.pyc" -delete || true
+                rm -rf venv || true
+            '''
         }
     }
 }
