@@ -50,7 +50,7 @@ def data_extraction(
 
 @component(
     base_image="python:3.9",
-    packages_to_install=["pandas==2.1.3", "scikit-learn==1.3.2", "numpy==1.24.3"]
+    packages_to_install=["pandas==2.1.3", "scikit-learn==1.3.2", "numpy==1.26.4"]
 )
 def data_preprocessing(
     input_data: Input[Dataset],
