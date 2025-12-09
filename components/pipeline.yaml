@@ -1,0 +1,416 @@
+# PIPELINE DEFINITION
+# Name: iris-classification-pipeline
+# Description: End-to-end ML pipeline for Iris species classification using DVC
+# Inputs:
+#    data_path: str [Default: 'data/iris.csv']
+#    max_depth: int [Default: 10.0]
+#    n_estimators: int [Default: 100.0]
+#    random_state: int [Default: 42.0]
+#    repo_url: str [Default: 'https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment.git']
+#    test_size: float [Default: 0.2]
+# Outputs:
+#    model-evaluation-metrics_output: system.Metrics
+components:
+  comp-data-extraction:
+    executorLabel: exec-data-extraction
+    inputDefinitions:
+      parameters:
+        data_path:
+          defaultValue: data/iris.csv
+          isOptional: true
+          parameterType: STRING
+        repo_url:
+          defaultValue: https://github.com/YOUR_USERNAME/mlops-kubeflow-assignment.git
+          isOptional: true
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        dataset_path:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-data-preprocessing:
+    executorLabel: exec-data-preprocessing
+    inputDefinitions:
+      artifacts:
+        input_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        test_size:
+          defaultValue: 0.2
+          isOptional: true
+          parameterType: NUMBER_DOUBLE
+    outputDefinitions:
+      artifacts:
+        test_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        train_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-model-evaluation:
+    executorLabel: exec-model-evaluation
+    inputDefinitions:
+      artifacts:
+        model_input:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        test_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        metrics_output:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+  comp-model-training:
+    executorLabel: exec-model-training
+    inputDefinitions:
+      artifacts:
+        train_data:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        max_depth:
+          defaultValue: 10.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        n_estimators:
+          defaultValue: 100.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        model_output:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-data-extraction:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_extraction
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'pandas==2.1.3'\
+          \ 'dvc==3.30.1' 'pygit2==1.13.3' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_extraction(\n    dataset_path: Output[Dataset],\n    repo_url:\
+          \ str = \"https://github.com/YOUR_USERNAME/mlops-kubeflow-assignment.git\"\
+          ,\n    data_path: str = \"data/iris.csv\"\n):\n\n    import pandas as pd\n\
+          \    import dvc.api\n    import os\n\n    print(f\"Fetching DVC tracked\
+          \ data from repository...\")\n    print(f\"Repo: {repo_url}\")\n    print(f\"\
+          Path: {data_path}\")\n\n    try:\n        # Use DVC API to fetch the data\
+          \ directly from remote storage\n        with dvc.api.open(data_path, repo=repo_url,\
+          \ mode='r') as f:\n            df = pd.read_csv(f)\n\n        print(f\"\
+          Data fetched successfully from DVC remote!\")\n        print(f\"Shape: {df.shape}\"\
+          )\n        print(f\"Columns: {list(df.columns)}\")\n\n    except Exception\
+          \ as e:\n        print(f\"Warning: Could not fetch from DVC remote: {e}\"\
+          )\n        print(\"Falling back to local Iris dataset for demonstration...\"\
+          )\n\n        # Fallback: Load Iris dataset locally\n        from sklearn.datasets\
+          \ import load_iris\n        iris = load_iris()\n        df = pd.DataFrame(iris.data,\
+          \ columns=iris.feature_names)\n        df['target'] = iris.target\n    \
+          \    print(f\"Using fallback data. Shape: {df.shape}\")\n\n    # Save to\
+          \ output path\n    df.to_csv(dataset_path.path, index=False)\n    print(f\"\
+          Data extraction complete!\")\n\n"
+        image: python:3.9
+    exec-data-preprocessing:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_preprocessing
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'pandas==2.1.3'\
+          \ 'scikit-learn==1.3.2' 'numpy==1.24.3' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_preprocessing(\n    input_data: Input[Dataset],\n    train_data:\
+          \ Output[Dataset],\n    test_data: Output[Dataset],\n    test_size: float\
+          \ = 0.2,\n    random_state: int = 42\n):\n\n    import pandas as pd\n  \
+          \  from sklearn.model_selection import train_test_split\n    from sklearn.preprocessing\
+          \ import StandardScaler\n\n    print(\"Starting data preprocessing...\"\
+          )\n\n    # Load data\n    df = pd.read_csv(input_data.path)\n    print(f\"\
+          Loaded data shape: {df.shape}\")\n\n    # Handle missing values\n    df\
+          \ = df.dropna()\n\n    # Separate features and target\n    X = df.drop('target',\
+          \ axis=1)\n    y = df['target']\n\n    print(f\"Features: {list(X.columns)}\"\
+          )\n    print(f\"Class distribution: {y.value_counts().to_dict()}\")\n\n\
+          \    # Split data\n    X_train, X_test, y_train, y_test = train_test_split(\n\
+          \        X, y, test_size=test_size, random_state=random_state, stratify=y\n\
+          \    )\n\n    # Scale features\n    scaler = StandardScaler()\n    X_train_scaled\
+          \ = scaler.fit_transform(X_train)\n    X_test_scaled = scaler.transform(X_test)\n\
+          \n    # Convert back to DataFrame\n    train_df = pd.DataFrame(X_train_scaled,\
+          \ columns=X.columns)\n    train_df['target'] = y_train.values\n\n    test_df\
+          \ = pd.DataFrame(X_test_scaled, columns=X.columns)\n    test_df['target']\
+          \ = y_test.values\n\n    # Save processed data\n    train_df.to_csv(train_data.path,\
+          \ index=False)\n    test_df.to_csv(test_data.path, index=False)\n\n    print(f\"\
+          Preprocessing complete. Train: {train_df.shape}, Test: {test_df.shape}\"\
+          )\n\n"
+        image: python:3.9
+    exec-model-evaluation:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - model_evaluation
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'pandas==2.1.3'\
+          \ 'scikit-learn==1.3.2' 'joblib==1.3.2' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef model_evaluation(\n    model_input: Input[Model],\n    test_data:\
+          \ Input[Dataset],\n    metrics_output: Output[Metrics]\n):\n\n    import\
+          \ pandas as pd\n    from sklearn.metrics import accuracy_score, precision_recall_fscore_support,\
+          \ classification_report\n    import joblib\n    import json\n\n    print(\"\
+          Starting model evaluation...\")\n\n    # Load model and test data\n    model\
+          \ = joblib.load(model_input.path)\n    test_df = pd.read_csv(test_data.path)\n\
+          \n    X_test = test_df.drop('target', axis=1)\n    y_test = test_df['target']\n\
+          \n    # Make predictions\n    y_pred = model.predict(X_test)\n\n    # Calculate\
+          \ metrics\n    accuracy = accuracy_score(y_test, y_pred)\n    precision,\
+          \ recall, f1, support = precision_recall_fscore_support(\n        y_test,\
+          \ y_pred, average='weighted'\n    )\n\n    # Prepare metrics dictionary\n\
+          \    metrics = {\n        'accuracy': float(accuracy),\n        'precision':\
+          \ float(precision),\n        'recall': float(recall),\n        'f1_score':\
+          \ float(f1)\n    }\n\n    print(f\"Evaluation Metrics:\")\n    print(f\"\
+          \  Accuracy: {accuracy:.4f}\")\n    print(f\"  Precision: {precision:.4f}\"\
+          )\n    print(f\"  Recall: {recall:.4f}\")\n    print(f\"  F1-Score: {f1:.4f}\"\
+          )\n\n    # Detailed classification report\n    print(\"\\nClassification\
+          \ Report:\")\n    print(classification_report(y_test, y_pred, \n       \
+          \                         target_names=['setosa', 'versicolor', 'virginica']))\n\
+          \n    # Log metrics for Kubeflow\n    metrics_output.log_metric(\"accuracy\"\
+          , accuracy)\n    metrics_output.log_metric(\"precision\", precision)\n \
+          \   metrics_output.log_metric(\"recall\", recall)\n    metrics_output.log_metric(\"\
+          f1_score\", f1)\n\n    # Save metrics to file\n    with open(metrics_output.path,\
+          \ 'w') as f:\n        json.dump(metrics, f, indent=2)\n\n    print(\"Evaluation\
+          \ complete!\")\n\n"
+        image: python:3.9
+    exec-model-training:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - model_training
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.4.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"'  &&\
+          \  python3 -m pip install --quiet --no-warn-script-location 'pandas==2.1.3'\
+          \ 'scikit-learn==1.3.2' 'joblib==1.3.2' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef model_training(\n    train_data: Input[Dataset],\n    model_output:\
+          \ Output[Model],\n    n_estimators: int = 100,\n    max_depth: int = 10,\n\
+          \    random_state: int = 42\n):\n\n    import pandas as pd\n    from sklearn.ensemble\
+          \ import RandomForestClassifier\n    import joblib\n\n    print(\"Starting\
+          \ model training...\")\n\n    # Load training data\n    train_df = pd.read_csv(train_data.path)\n\
+          \    X_train = train_df.drop('target', axis=1)\n    y_train = train_df['target']\n\
+          \n    print(f\"Training data shape: {X_train.shape}\")\n    print(f\"Number\
+          \ of classes: {len(y_train.unique())}\")\n\n    # Train classifier model\n\
+          \    model = RandomForestClassifier(\n        n_estimators=n_estimators,\n\
+          \        max_depth=max_depth,\n        random_state=random_state,\n    \
+          \    n_jobs=-1\n    )\n\n    model.fit(X_train, y_train)\n\n    # Save model\n\
+          \    joblib.dump(model, model_output.path)\n\n    print(f\"Model trained\
+          \ successfully with {n_estimators} estimators\")\n    print(f\"Training\
+          \ accuracy: {model.score(X_train, y_train):.4f}\")\n\n"
+        image: python:3.9
+pipelineInfo:
+  description: End-to-end ML pipeline for Iris species classification using DVC
+  name: iris-classification-pipeline
+root:
+  dag:
+    outputs:
+      artifacts:
+        model-evaluation-metrics_output:
+          artifactSelectors:
+          - outputArtifactKey: metrics_output
+            producerSubtask: model-evaluation
+    tasks:
+      data-extraction:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-extraction
+        inputs:
+          parameters:
+            data_path:
+              componentInputParameter: data_path
+            repo_url:
+              componentInputParameter: repo_url
+        taskInfo:
+          name: Extract Data from DVC
+      data-preprocessing:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-preprocessing
+        dependentTasks:
+        - data-extraction
+        inputs:
+          artifacts:
+            input_data:
+              taskOutputArtifact:
+                outputArtifactKey: dataset_path
+                producerTask: data-extraction
+          parameters:
+            random_state:
+              componentInputParameter: random_state
+            test_size:
+              componentInputParameter: test_size
+        taskInfo:
+          name: Preprocess Data
+      model-evaluation:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-model-evaluation
+        dependentTasks:
+        - data-preprocessing
+        - model-training
+        inputs:
+          artifacts:
+            model_input:
+              taskOutputArtifact:
+                outputArtifactKey: model_output
+                producerTask: model-training
+            test_data:
+              taskOutputArtifact:
+                outputArtifactKey: test_data
+                producerTask: data-preprocessing
+        taskInfo:
+          name: Evaluate Model
+      model-training:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-model-training
+        dependentTasks:
+        - data-preprocessing
+        inputs:
+          artifacts:
+            train_data:
+              taskOutputArtifact:
+                outputArtifactKey: train_data
+                producerTask: data-preprocessing
+          parameters:
+            max_depth:
+              componentInputParameter: max_depth
+            n_estimators:
+              componentInputParameter: n_estimators
+            random_state:
+              componentInputParameter: random_state
+        taskInfo:
+          name: Train Classifier
+  inputDefinitions:
+    parameters:
+      data_path:
+        defaultValue: data/iris.csv
+        isOptional: true
+        parameterType: STRING
+      max_depth:
+        defaultValue: 10.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      n_estimators:
+        defaultValue: 100.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      random_state:
+        defaultValue: 42.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      repo_url:
+        defaultValue: https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment.git
+        isOptional: true
+        parameterType: STRING
+      test_size:
+        defaultValue: 0.2
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+  outputDefinitions:
+    artifacts:
+      model-evaluation-metrics_output:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.4.0
