@@ -1,4 +1,4 @@
-# MLOps Kubeflow Assignment
+# Kubeflow MLOps Pipeline (Iris Classification)
 
 ## Project Overview
 
@@ -28,7 +28,7 @@ The project addresses a multi-class classification problem using the classic Iri
 ## Project Structure
 
 ```
-mlops-kubeflow-assignment/
+kubeflow-mlops-pipeline/
 │
 ├── data/                          # Dataset directory
 │   ├── iris.csv                   # Raw Iris dataset
@@ -41,7 +41,7 @@ mlops-kubeflow-assignment/
 ├── components/                    # Compiled pipeline artifacts
 │   └── pipeline.yaml              # Compiled Kubeflow pipeline
 │
-├── Deliverables/                  # Assignment deliverables
+├── Deliverables/                  # Project artifacts and run evidence
 │   ├── Task 1/                    # Data versioning screenshots
 │   ├── Task 2/                    # Component screenshots
 │   ├── Task 3/                    # Kubeflow execution screenshots
@@ -67,8 +67,8 @@ mlops-kubeflow-assignment/
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment.git
-cd mlops-kubeflow-assignment
+git clone https://github.com/D3aThNdDeMiSe/kubeflow-mlops-pipeline.git
+cd kubeflow-mlops-pipeline
 ```
 
 ### 2. Set Up Python Environment
@@ -275,7 +275,7 @@ client = kfp.Client(host='http://localhost:8080')
 client.create_run_from_pipeline_package(
     pipeline_file='components/pipeline.yaml',
     arguments={
-        'repo_url': 'https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment.git',
+        'repo_url': 'https://github.com/D3aThNdDeMiSe/kubeflow-mlops-pipeline.git',
         'data_path': 'data/iris.csv',
         'test_size': 0.2,
         'n_estimators': 100,
@@ -457,7 +457,7 @@ The pipeline accepts the following parameters:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `repo_url` | string | `https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment.git` | GitHub repository URL |
+| `repo_url` | string | `https://github.com/D3aThNdDeMiSe/kubeflow-mlops-pipeline.git` | GitHub repository URL |
 | `data_path` | string | `data/iris.csv` | Path to dataset in repository |
 | `test_size` | float | `0.2` | Proportion of data for testing (0.0-1.0) |
 | `n_estimators` | int | `100` | Number of trees in Random Forest |
@@ -493,7 +493,7 @@ test_size: 0.15-0.25
 
 ## Contributing
 
-This is an academic project for an MLOps assignment. However, suggestions and improvements are welcome:
+This project is open to suggestions and improvements:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/improvement`)
@@ -505,14 +505,13 @@ This is an academic project for an MLOps assignment. However, suggestions and im
 
 ## License
 
-This project is created for educational purposes as part of an MLOps course assignment.
+This repository is shared for learning, experimentation, and portfolio demonstration.
 
 ---
 
 ## Contact
 
-**Student**: Immad  
-**Repository**: [github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment](https://github.com/D3aThNdDeMiSe/mlops-kubeflow-assignment)
+**Repository**: [github.com/D3aThNdDeMiSe/kubeflow-mlops-pipeline](https://github.com/D3aThNdDeMiSe/kubeflow-mlops-pipeline)
 
 For questions or issues, please open an issue on GitHub.
 
